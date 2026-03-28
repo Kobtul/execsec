@@ -586,6 +586,20 @@ parse_arguments() {
 # ============================================================================
 
 main() {
+    # Handle informational flags before any setup/logging side effects.
+    for arg in "$@"; do
+        case "$arg" in
+            -h|--help)
+                show_usage
+                exit 0
+                ;;
+            --version)
+                echo "secure-run v$ORCHESTRATOR_VERSION"
+                exit 0
+                ;;
+        esac
+    done
+
     print_header "SECURE-RUN v$ORCHESTRATOR_VERSION"
 
     # Parse command line

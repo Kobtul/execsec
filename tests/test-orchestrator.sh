@@ -143,8 +143,8 @@ test_check_only_mode() {
         fi
 
         print_test "guard.sh check-only: blocked command exits 1"
-        "$GUARD" -c "rm -rf /tmp/fake99_test_llmsec" 2>/dev/null
-        EXIT_CODE=$?
+        EXIT_CODE=0
+        "$GUARD" -c "rm -rf /tmp/fake99_test_llmsec" 2>/dev/null || EXIT_CODE=$?
         assert_failure $EXIT_CODE "guard.sh should exit 1 for blocked commands"
 
         print_test "guard.sh --exec: executes allowed command and produces output"
@@ -172,8 +172,8 @@ test_check_only_mode() {
     fi
 
     print_test "intercept.py check-only: blocked command exits 1"
-    python3 "$PROJECT_ROOT/tools/interceptors/intercept.py" "rm -rf /tmp/fake99_test_llmsec" 2>/dev/null
-    EXIT_CODE=$?
+    EXIT_CODE=0
+    python3 "$PROJECT_ROOT/tools/interceptors/intercept.py" "rm -rf /tmp/fake99_test_llmsec" 2>/dev/null || EXIT_CODE=$?
     assert_failure $EXIT_CODE "intercept.py should exit 1 for blocked commands"
 
     print_test "intercept.py --exec: executes and produces output"
@@ -184,7 +184,7 @@ test_check_only_mode() {
 
     # --- intercept-enhanced.py check-only ---
     print_test "intercept-enhanced.py check-only: allowed command exits 0, no output"
-    OUTPUT=$(python3 "$PROJECT_ROOT/tools/interceptors/intercept-enhanced.py" "echo check_only_enhanced_test" 2>/dev/null)
+    OUTPUT=$("$PROJECT_ROOT/tools/interceptors/intercept-enhanced.py" "echo check_only_enhanced_test" 2>/dev/null)
     EXIT_CODE=$?
     assert_success $EXIT_CODE "intercept-enhanced.py check-only should exit 0 for safe commands"
     if echo "$OUTPUT" | grep -q "check_only_enhanced_test"; then
@@ -196,12 +196,12 @@ test_check_only_mode() {
     fi
 
     print_test "intercept-enhanced.py check-only: blocked command exits 1"
-    python3 "$PROJECT_ROOT/tools/interceptors/intercept-enhanced.py" "rm -rf /tmp/fake99_test_llmsec" 2>/dev/null
-    EXIT_CODE=$?
+    EXIT_CODE=0
+    "$PROJECT_ROOT/tools/interceptors/intercept-enhanced.py" "rm -rf /tmp/fake99_test_llmsec" 2>/dev/null || EXIT_CODE=$?
     assert_failure $EXIT_CODE "intercept-enhanced.py should exit 1 for blocked commands"
 
     print_test "intercept-enhanced.py --exec: executes and produces output"
-    OUTPUT=$(python3 "$PROJECT_ROOT/tools/interceptors/intercept-enhanced.py" --exec "echo exec_enhanced_test" 2>/dev/null)
+    OUTPUT=$("$PROJECT_ROOT/tools/interceptors/intercept-enhanced.py" --exec "echo exec_enhanced_test" 2>/dev/null)
     EXIT_CODE=$?
     assert_success $EXIT_CODE "intercept-enhanced.py --exec should exit 0"
     assert_contains "$OUTPUT" "exec_enhanced_test"
@@ -233,16 +233,8 @@ test_interceptor() {
 
     print_test "Interceptor blocks dangerous commands (dry run)"
     # NOTE: Just tests pattern matching, doesn't execute rm
-    OUTPUT=$("$PROJECT_ROOT/tools/interceptors/intercept-enhanced.py" "echo rm -rf /" 2>&1 || true)
-    # Interceptor should still catch "rm -rf" in the echo command string
-    if echo "$OUTPUT" | grep -q "rm"; then
-        # If it passed through, that's actually OK for 'echo'
-        # Let's test direct pattern instead
-        OUTPUT=$("$PROJECT_ROOT/tools/interceptors/intercept-enhanced.py" "rm -rf /tmp/fake-test-path-12345" 2>&1 || true)
-        assert_contains "$OUTPUT" "blocked"
-    else
-        assert_contains "$OUTPUT" "blocked"
-    fi
+    OUTPUT=$("$PROJECT_ROOT/tools/interceptors/intercept-enhanced.py" "rm -rf /tmp/fake-test-path-12345" 2>&1 || true)
+    assert_contains "$OUTPUT" "blocked"
 
     print_test "Interceptor shows helpful message"
     OUTPUT=$("$PROJECT_ROOT/tools/interceptors/intercept-enhanced.py" "rm -rf /tmp/nonexistent-test-path-99999" 2>&1 || true)
@@ -520,8 +512,12 @@ test_logging() {
 
     print_test "Log contains timestamp"
     if [ -f ~/.llmsec/logs/intercept.log ]; then
-        grep -q "\[20[0-9][0-9]-" ~/.llmsec/logs/intercept.log
-        assert_success $? "Log should contain timestamp"
+        if grep -q "^20[0-9][0-9]-" ~/.llmsec/logs/intercept.log; then
+            LOG_STATUS=0
+        else
+            LOG_STATUS=1
+        fi
+        assert_success $LOG_STATUS "Log should contain timestamp"
     fi
 }
 
@@ -624,12 +620,10 @@ test_pattern_matching() {
         assert_success 0 "Safe command correctly allowed"
     fi
 
-    print_test "Blocks even when command is quoted/echo'd"
-    # Even 'echo rm -rf' should be caught if we're being paranoid
-    # But actually this is debatable - echo itself is harmless
-    # Let's test that direct dangerous commands are blocked
+    print_test "Blocks direct disk-write commands"
+    # Test that direct dangerous commands are blocked without execution.
     OUTPUT=$("$PROJECT_ROOT/tools/interceptors/intercept-enhanced.py" "dd if=/dev/zero of=/tmp/test-123 count=1" 2>&1 || true)
-    assert_contains "$OUTPUT" "blocked\|dangerous"
+    assert_contains "$OUTPUT" "not permitted\|Reason:"
 }
 
 # ============================================================================
