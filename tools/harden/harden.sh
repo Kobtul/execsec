@@ -4,12 +4,12 @@
 # ============================================================================
 #
 # Hardens a repository with security hooks for AI coding tools.
-# Supports: Claude Code, OpenCode, Cursor, Cline, Windsurf
+# Supports: Claude Code, Codex, OpenCode, Cursor, Cline, Windsurf
 # Universal: Git hooks (pre-commit, pre-push) work with ALL tools
 #
 # Usage: harden.sh [TARGET_DIR] [OPTIONS]
 #   TARGET_DIR         Directory to harden (default: current directory)
-#   --tool TOOL        Target tool: claude-code, opencode, cursor, cline, windsurf, all
+#   --tool TOOL        Target tool: claude-code, codex, opencode, cursor, cline, windsurf, all
 #                      (default: auto-detect)
 #   --project NAME     Project name for audit logs (default: directory basename)
 #   --no-hooks         Skip tool-specific hooks setup
@@ -129,6 +129,48 @@ merge_json() {
     fi
 }
 
+merge_codex_config() {
+    local fragment="$1"
+    local target="$2"
+    local desc="${3:-$target}"
+
+    if $DRY_RUN; then
+        log_dry "Merge settings into $desc"
+        return
+    fi
+
+    if [[ -f "$target" ]]; then
+        # Enable Codex hooks without clobbering unrelated project settings.
+        if grep -Eq '^[[:space:]]*codex_hooks[[:space:]]*=' "$target"; then
+            sed -E -i 's/^[[:space:]]*codex_hooks[[:space:]]*=.*/codex_hooks = true/' "$target"
+        elif grep -Eq '^[[:space:]]*\[features\][[:space:]]*$' "$target"; then
+            local tmp_target="/tmp/llmsec_codex_config_$$.toml"
+            awk '
+                BEGIN { inserted = 0 }
+                /^[[:space:]]*\[features\][[:space:]]*$/ && inserted == 0 {
+                    print
+                    print "codex_hooks = true"
+                    inserted = 1
+                    next
+                }
+                { print }
+            ' "$target" > "$tmp_target"
+            mv "$tmp_target" "$target"
+        else
+            printf '\n# Enable native Codex lifecycle hooks for repository hardening.\n' >> "$target"
+            cat "$fragment" >> "$target"
+        fi
+
+        FILES_MODIFIED=$((FILES_MODIFIED + 1))
+        log_ok "Merged settings into $desc"
+    else
+        mkdir -p "$(dirname "$target")"
+        cp "$fragment" "$target"
+        FILES_CREATED=$((FILES_CREATED + 1))
+        log_ok "Created $desc"
+    fi
+}
+
 # ============================================================================
 # Auto-detection
 # ============================================================================
@@ -139,6 +181,8 @@ detect_tool() {
 
     if [[ -d "$dir/.claude" ]]; then
         detected="claude-code"
+    elif [[ -d "$dir/.codex" ]]; then
+        detected="codex"
     elif [[ -f "$dir/opencode.json" ]] || [[ -d "$dir/.opencode" ]]; then
         detected="opencode"
     elif [[ -d "$dir/.cursor" ]]; then
@@ -174,6 +218,28 @@ install_claude_code() {
             "$TEMPLATES_DIR/claude-code/settings-fragment.json" > "$tmp_fragment"
         merge_json "$tmp_fragment" "$dir/.claude/settings.json" ".claude/settings.json"
         rm -f "$tmp_fragment"
+    fi
+}
+
+install_codex() {
+    local dir="$1"
+    log_info "Setting up Codex security..."
+
+    if ! $SKIP_HOOKS; then
+        copy_template "$TEMPLATES_DIR/codex/hooks/security_hook.sh" \
+                      "$dir/.codex/hooks/security_hook.sh" \
+                      ".codex/hooks/security_hook.sh"
+        make_executable "$dir/.codex/hooks/security_hook.sh"
+
+        copy_template "$TEMPLATES_DIR/codex/hooks.json" \
+                      "$dir/.codex/hooks.json" \
+                      ".codex/hooks.json"
+    fi
+
+    if ! $SKIP_SETTINGS; then
+        merge_codex_config "$TEMPLATES_DIR/codex/config-fragment.toml" \
+                           "$dir/.codex/config.toml" \
+                           ".codex/config.toml"
     fi
 }
 
@@ -323,8 +389,8 @@ show_help() {
     echo "  TARGET_DIR             Directory to harden (default: current directory)"
     echo ""
     echo "Options:"
-    echo "  --tool TOOL            Target tool: claude-code, opencode, cursor, cline,"
-    echo "                         windsurf, all (default: auto-detect)"
+    echo "  --tool TOOL            Target tool: claude-code, codex, opencode, cursor,"
+    echo "                         cline, windsurf, all (default: auto-detect)"
     echo "  --project NAME         Project name for audit logs (default: dir basename)"
     echo "  --no-hooks             Skip tool-specific hooks setup"
     echo "  --no-git-hooks         Skip git pre-commit/pre-push hook setup"
@@ -337,6 +403,7 @@ show_help() {
     echo "  harden.sh                          # Auto-detect tool, harden current dir"
     echo "  harden.sh /path/to/repo            # Harden specific directory"
     echo "  harden.sh --tool claude-code       # Force Claude Code setup"
+    echo "  harden.sh --tool codex             # Force Codex setup"
     echo "  harden.sh --tool all               # Install hooks for all tools"
     echo "  harden.sh --dry-run                # Preview changes"
     echo "  harden.sh --tool all --with-wrapper  # Everything including shell wrapper"
@@ -448,6 +515,9 @@ main() {
         claude-code)
             install_claude_code "$TARGET_DIR"
             ;;
+        codex)
+            install_codex "$TARGET_DIR"
+            ;;
         opencode)
             install_opencode "$TARGET_DIR"
             ;;
@@ -462,6 +532,7 @@ main() {
             ;;
         all)
             install_claude_code "$TARGET_DIR"
+            install_codex "$TARGET_DIR"
             install_opencode "$TARGET_DIR"
             install_cursor "$TARGET_DIR"
             install_cline "$TARGET_DIR"
@@ -472,7 +543,7 @@ main() {
             ;;
         *)
             log_err "Unknown tool: $TOOL"
-            log_err "Supported: claude-code, opencode, cursor, cline, windsurf, all"
+            log_err "Supported: claude-code, codex, opencode, cursor, cline, windsurf, all"
             exit 1
             ;;
     esac
@@ -509,6 +580,10 @@ main() {
         case "$TOOL" in
             claude-code)
                 echo "  echo '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"rm -rf /\"}}' | bash $TARGET_DIR/.claude/hooks/security_hook.sh"
+                echo "  (Should show BLOCKED message and exit 2)"
+                ;;
+            codex)
+                echo "  echo '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"rm -rf /\"}}' | bash $TARGET_DIR/.codex/hooks/security_hook.sh"
                 echo "  (Should show BLOCKED message and exit 2)"
                 ;;
             cursor)

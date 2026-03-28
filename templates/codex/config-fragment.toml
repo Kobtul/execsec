@@ -1,0 +1,3 @@
+# Enable Codex lifecycle hooks for repository-local security checks.
+[features]
+codex_hooks = true

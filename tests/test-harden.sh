@@ -92,6 +92,24 @@ assert_json_valid() {
     fi
 }
 
+assert_toml_valid() {
+    if python3 - <<'PY' >/dev/null 2>&1
+import sys
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib  # type: ignore
+
+tomllib.loads(sys.stdin.read())
+PY
+    then
+        pass
+    else
+        fail "Invalid TOML"
+    fi
+}
+
 setup_test_repo() {
     rm -rf "$TEST_DIR"
     mkdir -p "$TEST_DIR"
@@ -128,6 +146,15 @@ test_templates_exist() {
 
     print_test "OpenCode permissions fragment exists"
     assert_file_exists "$TEMPLATES_DIR/opencode/permissions-fragment.json"
+
+    print_test "Codex hook template exists"
+    assert_file_exists "$TEMPLATES_DIR/codex/hooks/security_hook.sh"
+
+    print_test "Codex hooks.json exists"
+    assert_file_exists "$TEMPLATES_DIR/codex/hooks.json"
+
+    print_test "Codex config fragment exists"
+    assert_file_exists "$TEMPLATES_DIR/codex/config-fragment.toml"
 
     print_test "Cursor hook template exists"
     assert_file_exists "$TEMPLATES_DIR/cursor/hooks/guard.sh"
@@ -218,6 +245,21 @@ test_templates_valid() {
     OUTPUT=$(cat "$TEMPLATES_DIR/cursor/hooks.json")
     assert_json_valid "$OUTPUT"
 
+    print_test "Codex hook is valid bash"
+    if bash -n "$TEMPLATES_DIR/codex/hooks/security_hook.sh" 2>/dev/null; then
+        pass
+    else
+        fail "Invalid bash syntax"
+    fi
+
+    print_test "Codex hooks.json is valid JSON"
+    OUTPUT=$(cat "$TEMPLATES_DIR/codex/hooks.json")
+    assert_json_valid "$OUTPUT"
+
+    print_test "Codex config fragment is valid TOML"
+    OUTPUT=$(cat "$TEMPLATES_DIR/codex/config-fragment.toml")
+    echo "$OUTPUT" | assert_toml_valid
+
     print_test "Windsurf settings fragment is valid JSON"
     OUTPUT=$(cat "$TEMPLATES_DIR/windsurf/settings-fragment.json")
     assert_json_valid "$OUTPUT"
@@ -304,6 +346,45 @@ test_claude_code_hook() {
     print_test "Ignores non-Bash tools (exit 0)"
     exit_code=0
     echo '{"tool_name":"Read","tool_input":{"path":"/etc/passwd"}}' | bash "$hook" 2>/dev/null || exit_code=$?
+    assert_exit_code "$exit_code" 0
+
+    print_test "Block message is helpful (contains suggestion)"
+    local output
+    output=$(echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /tmp/foo"}}' | bash "$hook" 2>&1 || true)
+    assert_contains "$output" "Suggestion|Alternative"
+
+    rm -f "$hook"
+}
+
+# ============================================================================
+# TEST SUITE: Codex hook behavior
+# ============================================================================
+
+test_codex_hook() {
+    print_header "Codex Hook Behavior"
+
+    local hook="/tmp/llmsec-test-codex-hook-$$.sh"
+    sed 's/__PROJECT_NAME__/test_project/g' "$TEMPLATES_DIR/codex/hooks/security_hook.sh" > "$hook"
+    chmod +x "$hook"
+
+    print_test "Blocks rm -rf (exit 2)"
+    local exit_code=0
+    echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /tmp/test"}}' | bash "$hook" 2>/dev/null || exit_code=$?
+    assert_exit_code "$exit_code" 2
+
+    print_test "Blocks sudo (exit 2)"
+    exit_code=0
+    echo '{"tool_name":"Bash","tool_input":{"command":"sudo reboot"}}' | bash "$hook" 2>/dev/null || exit_code=$?
+    assert_exit_code "$exit_code" 2
+
+    print_test "Allows safe echo (exit 0)"
+    exit_code=0
+    echo '{"tool_name":"Bash","tool_input":{"command":"echo hello"}}' | bash "$hook" 2>/dev/null || exit_code=$?
+    assert_exit_code "$exit_code" 0
+
+    print_test "Ignores non-Bash tools (exit 0)"
+    exit_code=0
+    echo '{"tool_name":"Read","tool_input":{"path":"README.md"}}' | bash "$hook" 2>/dev/null || exit_code=$?
     assert_exit_code "$exit_code" 0
 
     print_test "Block message is helpful (contains suggestion)"
@@ -421,7 +502,7 @@ test_shell_wrapper() {
 
     print_test "Allows safe echo via shell wrapper"
     local output
-    output=$(bash "$wrapper" -c "echo hello" 2>/dev/null)
+    output=$(bash "$wrapper" --exec -c "echo hello" 2>/dev/null)
     assert_contains "$output" "hello"
 
     print_test "Block message shown on stderr"
@@ -521,7 +602,7 @@ test_harden_dry_run() {
 
     print_test "Dry run for all tools"
     output=$(bash "$HARDEN_SCRIPT" "$TEST_DIR" --tool all --dry-run 2>&1)
-    assert_contains "$output" "Claude Code|OpenCode|Cursor|Cline|Windsurf"
+    assert_contains "$output" "Claude Code|Codex|OpenCode|Cursor|Cline|Windsurf"
 }
 
 # ============================================================================
@@ -575,6 +656,30 @@ test_harden_e2e() {
     echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /tmp/test"}}' | \
         bash "$TEST_DIR/.claude/hooks/security_hook.sh" 2>/dev/null || exit_code=$?
     assert_exit_code "$exit_code" 2
+
+    print_test "Harden for codex creates expected files"
+    rm -rf "$TEST_DIR/.codex"
+    bash "$HARDEN_SCRIPT" "$TEST_DIR" --tool codex --project testproj 2>/dev/null
+    assert_file_exists "$TEST_DIR/.codex/hooks/security_hook.sh"
+
+    print_test "Codex hooks.json was created"
+    assert_file_exists "$TEST_DIR/.codex/hooks.json"
+
+    print_test "Codex config.toml was created/merged"
+    assert_file_exists "$TEST_DIR/.codex/config.toml"
+
+    print_test "Codex config enables native hooks"
+    if grep -q 'codex_hooks = true' "$TEST_DIR/.codex/config.toml"; then
+        pass
+    else
+        fail "Expected codex_hooks = true in .codex/config.toml"
+    fi
+
+    print_test "Installed Codex hook blocks dangerous commands"
+    exit_code=0
+    echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /tmp/test"}}' | \
+        bash "$TEST_DIR/.codex/hooks/security_hook.sh" 2>/dev/null || exit_code=$?
+    assert_exit_code "$exit_code" 2
 }
 
 # ============================================================================
@@ -598,6 +703,13 @@ test_auto_detection() {
     cd "$tmpdir" && git init -q && cd "$SCRIPT_DIR"
     output=$(bash "$HARDEN_SCRIPT" "$tmpdir" --dry-run 2>&1)
     assert_contains "$output" "cursor"
+    rm -rf "$tmpdir"
+
+    print_test "Detects Codex from .codex/ directory"
+    mkdir -p "$tmpdir/.codex"
+    cd "$tmpdir" && git init -q && cd "$SCRIPT_DIR"
+    output=$(bash "$HARDEN_SCRIPT" "$tmpdir" --dry-run 2>&1)
+    assert_contains "$output" "codex"
     rm -rf "$tmpdir"
 
     print_test "Detects OpenCode from opencode.json"
@@ -668,6 +780,7 @@ main() {
     test_templates_exist
     test_templates_valid
     test_claude_code_hook
+    test_codex_hook
     test_cursor_hook
     test_cline_hook
     test_shell_wrapper

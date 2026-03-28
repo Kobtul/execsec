@@ -422,6 +422,11 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
     echo -e "{{BLUE}}Hardening for Claude Code...{{NC}}"
     {{tools_dir}}/harden/harden.sh {{DIR}} --tool claude-code
 
+# Harden for Codex specifically
+@harden-codex DIR=".":
+    echo -e "{{BLUE}}Hardening for Codex...{{NC}}"
+    {{tools_dir}}/harden/harden.sh {{DIR}} --tool codex
+
 # Install all tool templates
 @harden-all DIR=".":
     echo -e "{{BLUE}}Installing all tool templates...{{NC}}"

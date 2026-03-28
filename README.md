@@ -245,6 +245,7 @@ Harden any repository with security hooks for your AI coding tool. One command i
 | Tool | Hook Type | Auto-Detected |
 |------|-----------|---------------|
 | **Claude Code** | `PreToolUse` bash hook (exit 2 = block) | `.claude/` directory |
+| **Codex** | `PreToolUse` hook via `.codex/hooks.json` | `.codex/` directory |
 | **OpenCode** | TypeScript plugin (`tool.execute.before`) | `opencode.json` |
 | **Cursor** | `beforeShellExecution` hook (JSON stdin/stdout) | `.cursor/` directory |
 | **Cline** | `PreToolUse` hook (JSON stdin/stdout) | `.clinerules/` |
@@ -301,6 +302,9 @@ This walks you through: environment detection, tool selection, security level (b
 
 # Harden for Cursor
 ./tools/harden/harden.sh ~/my-project --tool cursor
+
+# Harden for Codex
+./tools/harden/harden.sh ~/my-project --tool codex
 
 # Git hooks only (works with any tool)
 ./tools/harden/harden.sh ~/my-project --no-hooks
