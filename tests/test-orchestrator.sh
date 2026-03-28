@@ -37,54 +37,54 @@ print_test() {
 }
 
 assert_success() {
-    ((TESTS_RUN++))
+    ((++TESTS_RUN))
     if [ $1 -eq 0 ]; then
         echo -e "${GREEN}  ✓ PASS${NC}"
-        ((TESTS_PASSED++))
+        ((++TESTS_PASSED))
         return 0
     else
         echo -e "${RED}  ✗ FAIL: $2${NC}"
-        ((TESTS_FAILED++))
+        ((++TESTS_FAILED))
         return 1
     fi
 }
 
 assert_failure() {
-    ((TESTS_RUN++))
+    ((++TESTS_RUN))
     if [ $1 -ne 0 ]; then
         echo -e "${GREEN}  ✓ PASS (correctly failed)${NC}"
-        ((TESTS_PASSED++))
+        ((++TESTS_PASSED))
         return 0
     else
         echo -e "${RED}  ✗ FAIL: Should have failed but succeeded${NC}"
-        ((TESTS_FAILED++))
+        ((++TESTS_FAILED))
         return 1
     fi
 }
 
 assert_contains() {
-    ((TESTS_RUN++))
+    ((++TESTS_RUN))
     if echo "$1" | grep -q "$2"; then
         echo -e "${GREEN}  ✓ PASS (contains '$2')${NC}"
-        ((TESTS_PASSED++))
+        ((++TESTS_PASSED))
         return 0
     else
         echo -e "${RED}  ✗ FAIL: Does not contain '$2'${NC}"
         echo -e "${RED}     Got: $1${NC}"
-        ((TESTS_FAILED++))
+        ((++TESTS_FAILED))
         return 1
     fi
 }
 
 assert_file_exists() {
-    ((TESTS_RUN++))
+    ((++TESTS_RUN))
     if [ -f "$1" ]; then
         echo -e "${GREEN}  ✓ PASS (file exists: $1)${NC}"
-        ((TESTS_PASSED++))
+        ((++TESTS_PASSED))
         return 0
     else
         echo -e "${RED}  ✗ FAIL: File does not exist: $1${NC}"
-        ((TESTS_FAILED++))
+        ((++TESTS_FAILED))
         return 1
     fi
 }
@@ -136,10 +136,10 @@ test_check_only_mode() {
         assert_success $EXIT_CODE "guard.sh -c 'echo ...' should exit 0 (allowed)"
         if echo "$OUTPUT" | grep -q "check_only_guard_test"; then
             echo -e "${RED}  ✗ FAIL: guard.sh executed the command in check-only mode${NC}"
-            ((TESTS_FAILED++)); ((TESTS_RUN++))
+            ((++TESTS_FAILED)); ((++TESTS_RUN))
         else
             echo -e "${GREEN}  ✓ PASS (no execution output in check-only mode)${NC}"
-            ((TESTS_PASSED++)); ((TESTS_RUN++))
+            ((++TESTS_PASSED)); ((++TESTS_RUN))
         fi
 
         print_test "guard.sh check-only: blocked command exits 1"
@@ -165,10 +165,10 @@ test_check_only_mode() {
     assert_success $EXIT_CODE "intercept.py check-only should exit 0 for safe commands"
     if echo "$OUTPUT" | grep -q "check_only_intercept_test"; then
         echo -e "${RED}  ✗ FAIL: intercept.py executed in check-only mode${NC}"
-        ((TESTS_FAILED++)); ((TESTS_RUN++))
+        ((++TESTS_FAILED)); ((++TESTS_RUN))
     else
         echo -e "${GREEN}  ✓ PASS (no execution output in check-only mode)${NC}"
-        ((TESTS_PASSED++)); ((TESTS_RUN++))
+        ((++TESTS_PASSED)); ((++TESTS_RUN))
     fi
 
     print_test "intercept.py check-only: blocked command exits 1"
@@ -189,10 +189,10 @@ test_check_only_mode() {
     assert_success $EXIT_CODE "intercept-enhanced.py check-only should exit 0 for safe commands"
     if echo "$OUTPUT" | grep -q "check_only_enhanced_test"; then
         echo -e "${RED}  ✗ FAIL: intercept-enhanced.py executed in check-only mode${NC}"
-        ((TESTS_FAILED++)); ((TESTS_RUN++))
+        ((++TESTS_FAILED)); ((++TESTS_RUN))
     else
         echo -e "${GREEN}  ✓ PASS (no execution output in check-only mode)${NC}"
-        ((TESTS_PASSED++)); ((TESTS_RUN++))
+        ((++TESTS_PASSED)); ((++TESTS_RUN))
     fi
 
     print_test "intercept-enhanced.py check-only: blocked command exits 1"
@@ -210,8 +210,12 @@ test_check_only_mode() {
     WRAPPER="$PROJECT_ROOT/tools/interceptors/intercept-wrapper.sh"
     print_test "intercept-wrapper.sh: file exists and is executable"
     assert_file_exists "$WRAPPER"
-    [ -x "$WRAPPER" ]
-    assert_success $? "intercept-wrapper.sh should be executable"
+    if [ -x "$WRAPPER" ]; then
+        EXEC_STATUS=0
+    else
+        EXEC_STATUS=1
+    fi
+    assert_success $EXEC_STATUS "intercept-wrapper.sh should be executable"
 
     print_test "intercept-wrapper.sh: executes allowed commands (always exec mode)"
     OUTPUT=$("$WRAPPER" -c "echo wrapper_exec_test" 2>/dev/null)
@@ -255,12 +259,12 @@ test_interceptor() {
     # Verify no execution output (check-only doesn't run the command)
     if [[ "$OUTPUT" == "test" ]]; then
         echo -e "${RED}  ✗ FAIL: Command was executed in check-only mode (should not execute)${NC}"
-        ((TESTS_FAILED++))
-        ((TESTS_RUN++))
+        ((++TESTS_FAILED))
+        ((++TESTS_RUN))
     else
         echo -e "${GREEN}  ✓ PASS (no execution output in check-only mode)${NC}"
-        ((TESTS_PASSED++))
-        ((TESTS_RUN++))
+        ((++TESTS_PASSED))
+        ((++TESTS_RUN))
     fi
 
     print_test "Interceptor blocks sudo (dry run)"
@@ -283,7 +287,7 @@ test_config_hierarchy() {
 
     setup_test_project
 
-    print_test "Create project-specific config"
+    print_test "Project-specific .settings config overrides all others"
     mkdir -p .settings
     cat > .settings/permissions.yaml << 'EOF'
 version: "1.0"
@@ -298,11 +302,55 @@ EOF
     OUTPUT=$("$PROJECT_ROOT/tools/interceptors/intercept-enhanced.py" "test-blocked-command" 2>&1 || true)
     assert_contains "$OUTPUT" "Project-specific block"
 
+    print_test ".codex config is discovered when .settings and .claude are absent"
+    rm -rf .settings .claude .codex .opencode
+    mkdir -p .codex
+    cat > .codex/permissions.yaml << 'EOF'
+version: "1.0"
+deny:
+  - pattern: "codex-only-command"
+    message: "Codex config block"
+EOF
+    OUTPUT=$("$PROJECT_ROOT/tools/interceptors/intercept-enhanced.py" "codex-only-command" 2>&1 || true)
+    assert_contains "$OUTPUT" "Codex config block"
+
+    print_test ".claude config still overrides .codex config"
+    mkdir -p .claude
+    cat > .claude/permissions.yaml << 'EOF'
+version: "1.0"
+deny:
+  - pattern: "shared-priority-command"
+    message: "Claude config block"
+EOF
+    cat > .codex/permissions.yaml << 'EOF'
+version: "1.0"
+deny:
+  - pattern: "shared-priority-command"
+    message: "Codex config block"
+EOF
+    OUTPUT=$("$PROJECT_ROOT/tools/interceptors/intercept-enhanced.py" "shared-priority-command" 2>&1 || true)
+    assert_contains "$OUTPUT" "Claude config block"
+
+    print_test ".codex config overrides .opencode config"
+    rm -rf .claude
+    mkdir -p .opencode
+    cat > .codex/permissions.yaml << 'EOF'
+version: "1.0"
+deny:
+  - pattern: "codex-vs-opencode-command"
+    message: "Codex wins"
+EOF
+    cat > .opencode/permissions.yaml << 'EOF'
+version: "1.0"
+deny:
+  - pattern: "codex-vs-opencode-command"
+    message: "OpenCode loses"
+EOF
+    OUTPUT=$("$PROJECT_ROOT/tools/interceptors/intercept-enhanced.py" "codex-vs-opencode-command" 2>&1 || true)
+    assert_contains "$OUTPUT" "Codex wins"
+
     print_test "Default config used when no project config"
-    # Safe cleanup - only remove if it exists and we created it
-    if [ -d .settings ] && [ -f .settings/permissions.yaml ]; then
-        rm -rf .settings
-    fi
+    rm -rf .settings .claude .codex .opencode
     OUTPUT=$("$PROJECT_ROOT/tools/interceptors/intercept-enhanced.py" "rm -rf /" 2>&1 || true)
     assert_contains "$OUTPUT" "blocked"
 
@@ -336,6 +384,10 @@ test_orchestrator_cli() {
     print_test "Orchestrator accepts --app"
     OUTPUT=$("$PROJECT_ROOT/secure-run.sh" --help 2>&1)
     assert_contains "$OUTPUT" "app"
+
+    print_test "Help shows .codex in configuration hierarchy"
+    OUTPUT=$("$PROJECT_ROOT/secure-run.sh" --help 2>&1)
+    assert_contains "$OUTPUT" ".codex"
 }
 
 # ============================================================================
@@ -364,9 +416,9 @@ test_helpful_messages() {
         echo -e "${YELLOW}  ⚠ WARNING: Message uses harsh language${NC}"
     else
         echo -e "${GREEN}  ✓ Message is polite${NC}"
-        ((TESTS_PASSED++))
+        ((++TESTS_PASSED))
     fi
-    ((TESTS_RUN++))
+    ((++TESTS_RUN))
 }
 
 # ============================================================================
@@ -435,8 +487,12 @@ test_mock_agent() {
     assert_file_exists "$SCRIPT_DIR/mock-agent.sh"
 
     print_test "Mock agent is executable"
-    [ -x "$SCRIPT_DIR/mock-agent.sh" ]
-    assert_success $? "Mock agent should be executable"
+    if [ -x "$SCRIPT_DIR/mock-agent.sh" ]; then
+        EXEC_STATUS=0
+    else
+        EXEC_STATUS=1
+    fi
+    assert_success $EXEC_STATUS "Mock agent should be executable"
 
     print_test "Mock agent runs successfully"
     OUTPUT=$("$SCRIPT_DIR/mock-agent.sh" 2>&1 || true)
@@ -480,8 +536,12 @@ test_file_structure() {
     assert_file_exists "$PROJECT_ROOT/secure-run.sh"
 
     print_test "Orchestrator is executable"
-    [ -x "$PROJECT_ROOT/secure-run.sh" ]
-    assert_success $? "Orchestrator should be executable"
+    if [ -x "$PROJECT_ROOT/secure-run.sh" ]; then
+        EXEC_STATUS=0
+    else
+        EXEC_STATUS=1
+    fi
+    assert_success $EXEC_STATUS "Orchestrator should be executable"
 
     print_test "Enhanced interceptor exists"
     assert_file_exists "$PROJECT_ROOT/tools/interceptors/intercept-enhanced.py"

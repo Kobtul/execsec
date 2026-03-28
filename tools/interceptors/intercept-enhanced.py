@@ -34,6 +34,7 @@ def load_permissions_config() -> Dict:
     search_dirs = [
         os.getcwd() + "/.settings",
         os.getcwd() + "/.claude",
+        os.getcwd() + "/.codex",
         os.getcwd() + "/.opencode",
         os.path.expanduser("~/.llmsec/defaults"),
         os.path.dirname(__file__) + "/../../configs/defaults",

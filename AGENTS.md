@@ -201,16 +201,20 @@ Search order (most restrictive wins):
 ```
 1. .settings/       # Project-specific
 2. .claude/         # Claude Code config
-3. .opencode/       # OpenCode config
-4. ~/.llmsec/       # User defaults
-5. configs/defaults/# Bundled defaults
+3. .codex/          # Codex project config
+4. .opencode/       # OpenCode config
+5. ~/.llmsec/       # User defaults
+6. configs/defaults/# Bundled defaults
 ```
+
+`.settings/` remains the preferred tool-agnostic location for shared project rules. `.codex/` now participates in shared config discovery and also holds Codex-native hook/config files for hardening.
 
 Code pattern:
 ```python
 SETTINGS_DIRS = [
     os.getcwd() + "/.settings",
     os.getcwd() + "/.claude",
+    os.getcwd() + "/.codex",
     os.getcwd() + "/.opencode",
     os.path.expanduser("~/.llmsec/defaults"),
     os.path.dirname(__file__) + "/configs/defaults",

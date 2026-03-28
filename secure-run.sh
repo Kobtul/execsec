@@ -19,9 +19,10 @@
 # CONFIGURATION HIERARCHY (most restrictive wins):
 #   1. Project directory: .settings/  (default location)
 #   2. Project directory: .claude/
-#   3. Project directory: .opencode/
-#   4. Orchestrator defaults: ~/.llmsec/defaults/
-#   5. Bundled defaults: ./configs/defaults/
+#   3. Project directory: .codex/
+#   4. Project directory: .opencode/
+#   5. Orchestrator defaults: ~/.llmsec/defaults/
+#   6. Bundled defaults: ./configs/defaults/
 #
 # ALL SECURITY LAYERS ENABLED BY DEFAULT:
 #   ✓ Layer 1: Input filtering (permission blocklists)
@@ -46,6 +47,7 @@ ORCHESTRATOR_VERSION="0.2.0"
 SETTINGS_DIRS=(
     "$PROJECT_DIR/.settings"
     "$PROJECT_DIR/.claude"
+    "$PROJECT_DIR/.codex"
     "$PROJECT_DIR/.opencode"
     "$HOME/.llmsec/defaults"
     "$SCRIPT_DIR/configs/defaults"
@@ -470,9 +472,10 @@ CONFIGURATION:
     Configs are searched in this order (most restrictive wins):
     1. $PROJECT_DIR/.settings/
     2. $PROJECT_DIR/.claude/
-    3. $PROJECT_DIR/.opencode/
-    4. ~/.llmsec/defaults/
-    5. Bundled defaults
+    3. $PROJECT_DIR/.codex/
+    4. $PROJECT_DIR/.opencode/
+    5. ~/.llmsec/defaults/
+    6. Bundled defaults
 
 FILES:
     Logs:        $LOG_DIR/

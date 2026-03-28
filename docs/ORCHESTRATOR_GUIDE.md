@@ -64,9 +64,12 @@ Configurations are discovered automatically in this order (most restrictive wins
 
 1. **Project**: `.settings/` (your project's specific rules)
 2. **Project**: `.claude/` (Claude Code config)
-3. **Project**: `.opencode/` (OpenCode config)
-4. **User**: `~/.llmsec/defaults/` (your personal defaults)
-5. **Bundled**: `llmsec/configs/defaults/` (fallback defaults)
+3. **Project**: `.codex/` (Codex project config)
+4. **Project**: `.opencode/` (OpenCode config)
+5. **User**: `~/.llmsec/defaults/` (your personal defaults)
+6. **Bundled**: `llmsec/configs/defaults/` (fallback defaults)
+
+`.settings/` remains the preferred tool-agnostic location for shared project rules. `.codex/` now participates in shared configuration discovery and still holds Codex-native hardening files.
 
 ## Usage
 

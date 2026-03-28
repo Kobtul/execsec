@@ -76,12 +76,15 @@ Project-specific rules override user defaults:
 ```
 1. .settings/       ← Project-specific (highest priority)
 2. .claude/         ← Claude Code config
-3. .opencode/       ← OpenCode config
-4. ~/.llmsec/       ← Your personal defaults
-5. configs/defaults/← Bundled defaults (fallback)
+3. .codex/          ← Codex project config
+4. .opencode/       ← OpenCode config
+5. ~/.llmsec/       ← Your personal defaults
+6. configs/defaults/← Bundled defaults (fallback)
 ```
 
 Most restrictive setting wins.
+
+`.settings/` remains the preferred tool-agnostic location for shared project rules. `.codex/` now participates in shared config discovery and also holds Codex-native hook files for repository hardening.
 
 ### 4. Universal Compatibility
 

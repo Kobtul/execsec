@@ -68,9 +68,12 @@ llmsec/
 **Search order** (most restrictive wins):
 1. `.settings/` - Project-specific rules
 2. `.claude/` - Claude Code config
-3. `.opencode/` - OpenCode config  
-4. `~/.llmsec/defaults/` - Personal defaults
-5. `configs/defaults/` - Bundled defaults
+3. `.codex/` - Codex project config
+4. `.opencode/` - OpenCode config  
+5. `~/.llmsec/defaults/` - Personal defaults
+6. `configs/defaults/` - Bundled defaults
+
+`.settings/` remains the preferred tool-agnostic location for shared project rules. `.codex/` now participates in shared config discovery and still holds Codex-native hardening files.
 
 **Example**:
 
