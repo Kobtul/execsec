@@ -240,6 +240,8 @@ export ENABLE_DATA_THEFT_PREVENTION=true
 
 Harden any repository with security hooks for your AI coding tool. One command installs native hooks, git hooks, and audit logging.
 
+`tools/harden/harden.sh` is the canonical hardening interface for all supported tools. The Claude wizard is a convenience wrapper for Claude Code users.
+
 ### Supported Tools
 
 | Tool | Hook Type | Auto-Detected |
@@ -286,7 +288,7 @@ just harden-all /path/to/your/repo
 
 ### Interactive Wizard
 
-For Claude Code users, use the interactive wizard:
+For Claude Code users, an interactive convenience command is available:
 
 ```
 /harden-wizard
@@ -294,17 +296,23 @@ For Claude Code users, use the interactive wizard:
 
 This walks you through: environment detection, tool selection, security level (basic/recommended/maximum), preview, and verification.
 
+Codex and terminal users should run the hardening script directly:
+
+```bash
+./tools/harden/harden.sh ~/my-project --tool codex
+```
+
 ### Examples
 
 ```bash
 # Harden for Claude Code specifically
 ./tools/harden/harden.sh ~/my-project --tool claude-code
 
-# Harden for Cursor
-./tools/harden/harden.sh ~/my-project --tool cursor
-
 # Harden for Codex
 ./tools/harden/harden.sh ~/my-project --tool codex
+
+# Harden for Cursor
+./tools/harden/harden.sh ~/my-project --tool cursor
 
 # Git hooks only (works with any tool)
 ./tools/harden/harden.sh ~/my-project --no-hooks
